@@ -1,17 +1,17 @@
 # Lesson: Web Service Development and API Design
 
 ## Lesson Overview
-This lesson builds upon the foundational REST API concepts from the previous lesson and teaches students how to implement complete CRUD (Create,Read,Update,Delete) operations for managing resources. Students will learn the differences between controller annotations, handle HTTP request/response properly using ResponseEntity, implement custom exception handling, and use Lombok to reduce boilerplate code. By working through a practical Customer Resource Management (CRM) example, students will gain hands-on experience building production-ready REST APIs that follow industry best practices for status codes, error handling, and code organization.
+This lesson builds upon the foundational REST API concepts from the previous lesson and teaches students how to implement complete CRUD (Create, Read, Update, Delete) operations for managing resources. Students will learn the differences between controller annotations, handle HTTP request/response properly using ResponseEntity, implement custom exception handling, and use Lombok to reduce boilerplate code. By working through a practical Customer Resource Management (CRM) example, students will gain hands-on experience building production-ready REST APIs that follow industry best practices for status codes, error handling, and code organization.
 
 ---
 
 ## Lesson Objectives
 By the end of this lesson, students will be able to:
-- Differentiate between @Component, @Controller, and @RestController annotations
-- Implement complete CRUD operations (Create, Read, Update, Delete) for REST resources
-- Use ResponseEntity to return appropriate HTTP status codes (200, 201, 204, 404)
-- Create and handle custom exceptions for better error management
-- Apply Lombok annotations to reduce boilerplate code in POJOs
+
+1. **Differentiate** between `@Component`, `@Controller`, and `@RestController` annotations
+2. **Implement** complete CRUD operations for REST resources using `ResponseEntity` with appropriate HTTP status codes
+3. **Create** and handle custom exceptions for better error management
+4. **Apply** Lombok annotations to reduce boilerplate code in POJOs
 
 ---
 
@@ -199,15 +199,15 @@ Now try to get all the customers using Postman.
 
 #### Get a specific customer
 
-To get a specific customer, we need to know the `id` of the customer. We can get the `id` from the URL. using the `@PathVariable` annotation.
+To get a specific customer, we need to know the `id` of the customer. We can get the `id` from the URL using the `@PathVariable` annotation.
 
 Since we are storing the data in an array, we need to find the index of the customer in the array.
 
 Let's create a helper method to do this since we will be using it in multiple places.
 ```java
 private int getCustomerIndex(String id) {
-    for( Customer customer: customers) {
-        if(customer.getId().equals(id)) {
+    for (Customer customer : customers) {
+        if (customer.getId().equals(id)) {
             return customers.indexOf(customer);
         }
     }
@@ -244,27 +244,9 @@ public Customer updateCustomer(@PathVariable String id, @RequestBody Customer cu
 }
 ```
 
-Based on IETF's [HTTP specification](https://tools.ietf.org/html/rfc7231#section-4.3.4), the `PUT` method is used to replace the current representation of the target resource with the request payload.
+Based on IETF's [HTTP specification](https://tools.ietf.org/html/rfc7231#section-4.3.4), the `PUT` method is used to replace the current representation of the target resource with the request payload. To keep our implementation simple, we will only update if the record exists.
 
-This means that if the `id` does not exist, we should create a new `Customer` object with the `id` and the request payload. Note that this is not always the case, and it depends on the API design.
-```java
-@PutMapping("/customers/{id}")
-public Customer updateCustomer(@PathVariable String id, @RequestBody Customer customer) {
-    int index = getCustomerIndex(id);
-
-    if( index == -1) {
-        customers.add(customer);
-        return customer;
-    }
-
-    customers.set(index, customer);
-    return customer;
-}
-```
-
-To keep our implementation simple, we will use the former method i.e., to only update if the record if it exists.
-
-Note that you can also use the Patch method to update a resource. The `PATCH` method is used to apply partial modifications to a resource.
+Note that you can also use the `PATCH` method to apply partial modifications to a resource, rather than replacing it entirely.
 
 ### Delete
 
@@ -285,7 +267,7 @@ Now, we are currently just returning JSON data. We should also specify the statu
 
 `ResponseEntity` is a generic type that allows us to specify the response body and the status code.
 
-Currently it is always returning a `200` status code, which generally means that the request was successful. But there are other status codes that we should use to indicate the status of the request e.g.
+Currently it is always returning a `200` status code, which generally means that the request was successful. But there are other status codes that we should use to indicate the status of the request:
 
 - `200` - OK, used when a resource is retrieved
 - `201` - Created, used when a new resource is created
@@ -306,7 +288,7 @@ public ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
 }
 ```
 
-### 👨‍💻 Activity
+### 👨‍💻 Activity **(10 minutes)**
 
 Update the rest of the endpoints to use `ResponseEntity` with the appropriate status codes.
 
@@ -321,7 +303,7 @@ public class CustomerController {
 }
 ```
 
-The rest of the paths can then be updated to remove the `/customers` part.
+The rest of the paths can then be updated to remove the `/customers` prefix — for example `@GetMapping("/customers/{id}")` becomes `@GetMapping("/{id}")`.
 
 ### Custom Exception
 
@@ -338,11 +320,11 @@ public class CustomerNotFoundException extends RuntimeException {
 }
 ```
 
-Then, in our helper method, we can throw this exception if the customer is not found.
+Then, in our helper method, we can throw this exception instead of returning `-1`.
 ```java
 private int getCustomerIndex(String id) {
-    for( Customer customer: customers) {
-        if(customer.getId().equals(id)) {
+    for (Customer customer : customers) {
+        if (customer.getId().equals(id)) {
             return customers.indexOf(customer);
         }
     }
@@ -352,9 +334,7 @@ private int getCustomerIndex(String id) {
 }
 ```
 
-Since this exception is propagated up the call stack, we need to catch it in our handler method.
-
-Let's catch this exception in the methods that call this helper method so that we can return the appropriate status code when a customer `id` is not found.
+Since this exception is propagated up the call stack, we need to catch it in our handler methods. Let's update `getCustomer` first.
 ```java
 @GetMapping("/{id}")
 public ResponseEntity<Customer> getCustomer(@PathVariable String id) {
@@ -369,7 +349,7 @@ public ResponseEntity<Customer> getCustomer(@PathVariable String id) {
 
 Proceed to update the rest of the endpoints to handle the `CustomerNotFoundException`.
 
-### 👨‍💻 Activity
+### 👨‍💻 Activity **(20 minutes)**
 
 Practice creating CRUD endpoints with another resource called `Product` by yourself.
 
@@ -396,7 +376,7 @@ Lombok is a library that helps us to reduce boilerplate code. It does this by ge
 
 ### Installation
 
-To install Lombok, we need to add the Lombok dependency in VSCode.
+To install Lombok, we need to add the Lombok dependency in `pom.xml`.
 ```xml
 <dependency>
   <groupId>org.projectlombok</groupId>
