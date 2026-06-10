@@ -74,7 +74,58 @@ Since we are building a REST API and always returning JSON — not HTML pages �
 
 ---
 
-## Part 2: Building Our `simple-crm`
+## Part 2: Postman — Testing Your API
+
+### What is Postman?
+
+A browser can only make `GET` requests easily — you can't send a `POST` with a JSON body just from the address bar. **Postman** is a tool that lets you send any HTTP request (GET, POST, PUT, DELETE) with full control over the URL, headers, and request body. It shows you the response status code and body clearly, making it the standard tool for testing REST APIs during development.
+
+### Installation
+
+Download from [https://www.postman.com/downloads](https://www.postman.com/downloads). Install and create a free account, or skip sign-in and use it directly.
+
+### Key Areas of the UI
+
+- **Method selector** — dropdown on the left (GET, POST, PUT, DELETE)
+- **URL bar** — where you enter your endpoint URL
+- **Body tab** — where you attach a JSON payload for POST/PUT requests
+- **Response panel** — bottom half; shows status code, response time, and response body
+
+### Making a GET Request
+
+1. Select `GET` from the method dropdown
+2. Enter the URL: `http://localhost:8080/customers`
+3. Click **Send**
+4. Check the response panel — you should see your JSON data and a `200 OK` status
+
+### Making a POST Request
+
+1. Select `POST` from the method dropdown
+2. Enter the URL: `http://localhost:8080/customers`
+3. Click the **Body** tab → select **raw** → select **JSON** from the dropdown
+4. Paste your JSON payload:
+```json
+{
+  "firstName": "Bruce",
+  "lastName": "Banner",
+  "email": "bruce@avengers.com",
+  "contactNo": "12345678",
+  "jobTitle": "Scientist",
+  "yearOfBirth": 1975
+}
+```
+5. Click **Send**
+6. Check the response — you should see the created customer with a generated `id` and a `201 Created` status
+
+### PUT and DELETE
+
+Follow the same pattern as POST for `PUT` — select `PUT`, add the `id` to the URL (`/customers/{id}`), and include the updated JSON body.
+
+For `DELETE` — select `DELETE`, add the `id` to the URL, no body needed.
+
+---
+
+## Part 3: Building Our `simple-crm`
 
 If you have not done the last activity from the previous lesson, you can start creating a new Spring Boot project now.
 
@@ -410,13 +461,41 @@ To install Lombok, add the dependency in `pom.xml`.
 
 In real Spring Boot projects, you will see `@Data` used most commonly on entity and POJO classes.
 
-### Example Usage
+### What to Remove and What to Keep
 
-Without Lombok, our `Customer` class requires manually written getters, setters, and constructors — dozens of lines of repetitive code. With Lombok:
+When applying Lombok to an existing class, not everything gets deleted. Here is the rule:
+
+**Remove:**
+- All manually written getters — `@Data` generates them
+- All manually written setters — `@Data` generates them
+- The no-arg default constructor — replace with `@NoArgsConstructor`
+- The no-arg constructor that sets `this.id = UUID.randomUUID().toString()` — no longer needed once `id` is initialized inline (see below)
+
+**Keep:**
+- Any constructor that contains **custom logic** — Lombok cannot generate these. Our `Customer(String firstName, String lastName)` constructor stays because it is used for preloading data. It is not just assigning fields mechanically.
+
+### Inline UUID Initialization
+
+Previously our no-arg constructor was responsible for generating the UUID:
+```java
+public Customer() {
+    this.id = UUID.randomUUID().toString();
+}
+```
+
+With Lombok, we remove this constructor. To ensure every instance still gets a UUID regardless of which constructor is called, move the initialization inline:
+```java
+private final String id = UUID.randomUUID().toString();
+```
+
+Now the UUID is generated at the field level — both constructors (and any future ones) automatically get a unique `id` without you having to set it manually.
+
+### Final `Customer` Class with Lombok
 
 ```java
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -428,10 +507,16 @@ public class Customer {
   private String contactNo;
   private String jobTitle;
   private int yearOfBirth;
+
+  // Keep this constructor — it has custom logic used for preloading data
+  public Customer(String firstName, String lastName) {
+    this.firstName = firstName;
+    this.lastName = lastName;
+  }
 }
 ```
 
-`@Data` generates all getters and setters. `@NoArgsConstructor` generates the default constructor. The `id` field remains `final` and is auto-generated — Lombok will not generate a setter for `final` fields.
+`@Data` generates all getters and setters. `@NoArgsConstructor` generates the default no-arg constructor. Lombok will not generate a setter for `final` fields, so `id` remains immutable.
 
 For further reading, see the [Lombok documentation](https://projectlombok.org/features/all).
 
