@@ -1,4 +1,4 @@
-# Lesson: Web Service Development and API Design
+# Lesson 3.13: Web Service Development and API Design
 
 ## Lesson Overview
 This lesson builds upon the foundational REST API concepts from the previous lesson and teaches students how to implement complete CRUD (Create, Read, Update, Delete) operations for managing resources. Students will learn the differences between controller annotations, handle HTTP request/response properly using ResponseEntity, implement custom exception handling, and use Lombok to reduce boilerplate code. By working through a practical Customer Resource Management (CRM) example, students will gain hands-on experience building production-ready REST APIs that follow industry best practices for status codes, error handling, and code organization.
@@ -15,60 +15,62 @@ By the end of this lesson, students will be able to:
 
 ---
 
-## Part 1: `@Component`, `@Controller` and `@RestController`
+## Part 1: Annotations, Beans, and Controllers
 
-When we annotate with `@Component` or `@Controller`, we are telling Spring Boot to create a bean for us. Recall that a bean is an object that is managed by Spring Boot.
+### What is an Annotation?
 
-The `@Controller` is actually just a specialized alias of `@Component`. It is used to indicate that a particular class serves the role of a controller.
+An annotation is metadata you attach to a class, method, or field using the `@` symbol. The annotation itself contains no logic — it is a signal to the framework. When Spring Boot starts up, it scans your code, reads these annotations, and acts on them automatically.
 
-When we use `@Controller`, our handler methods are expected to return a view. This is useful when we are building a web application that returns HTML pages directly.
+Think of annotations as labels on a box. The label doesn't do anything by itself — but the person (Spring) reading the label knows exactly what to do with that box.
 
-To see how this works, let's add a `HomeController.java`.
 ```java
-@Controller
-public class HomeController {
+@RestController          // Label: "this class handles HTTP requests and returns data"
+public class CustomerController {
 
-  @GetMapping("/home")
-  public String home() {
-    return "home";
-  }
+    @GetMapping("/customers")   // Label: "this method handles GET /customers"
+    public String getCustomers() {
+        return "customers";
+    }
 }
 ```
 
-This will return the `home.html` page in the `resources/templates` folder.
+### What is a Bean?
 
-To return a view, we need to add the `spring-boot-starter-thymeleaf` dependency in `pom.xml`.
-```xml
-<dependency>
-  <groupId>org.springframework.boot</groupId>
-  <artifactId>spring-boot-starter-thymeleaf</artifactId>
-</dependency>
+A **bean** is simply an object that is created and managed by Spring Boot. Instead of you writing `new CustomerController()` yourself, Spring Boot creates it for you, manages its lifecycle, and makes it available throughout your application.
+
+When you annotate a class with `@Component` (or any of its specializations like `@Controller`, `@RestController`, `@Service`), you are telling Spring Boot: *"Please create an instance of this class and manage it for me."*
+
+This is the foundation of **Dependency Injection** — Spring manages your objects so you don't have to wire them together manually.
+
+### `@Component`, `@Controller`, and `@RestController`
+
+These three annotations form a hierarchy:
+
+**`@Component`** is the most generic. It simply tells Spring: *"Create a bean for this class."* You use it for utility classes or any Spring-managed object that doesn't fit a more specific role.
+
+```java
+@Component
+public class EmailValidator {
+    public boolean isValid(String email) {
+        return email.contains("@");
+    }
+}
 ```
 
-Once this is done, a view resolver is automatically configured for us. This means that we can return a view name in our handler method, and Spring Boot will automatically look for the view in the `resources/templates` folder.
+**`@Controller`** is a specialization of `@Component`. It signals that this class handles web requests. It inherits everything `@Component` does, but adds the context that this is a web layer class. By default, handler methods in a `@Controller` are expected to return a **view name** (an HTML page).
 
-You can try to create a `home.html` file in the `resources/templates` folder and load the page at `http://localhost:8080/home`.
+**`@ResponseBody`** changes that behavior. When added to a method (or the class), it tells Spring: *"Don't look for a view — serialize the return value directly into the HTTP response body as JSON."*
 
-If you want to know more about Thymeleaf, you can read the [documentation](https://www.thymeleaf.org/doc/tutorials/3.0/usingthymeleaf.html).
+**`@RestController`** is simply a shortcut that combines both:
 
-But since we are building a REST API, we will not be returning views. Instead, we will be returning data. The `@ResponseBody` annotation tells a controller that the object returned is automatically serialized into JSON and passed back into the HttpResponse object.
 ```java
+@RestController
+// is exactly the same as:
 @Controller
 @ResponseBody
-public class HomeController {
-
-  @GetMapping("/home")
-  public String home() {
-    return "home";
-  }
-}
 ```
 
-The `@RestController` annotation is a convenience annotation that combines `@Controller` and `@ResponseBody`, so we could do this instead:
-```java
-@RestController // @Controller + @ResponseBody
-public class HomeController
-```
+Since we are building a REST API and always returning JSON — not HTML pages — we will always use `@RestController`.
 
 ---
 
@@ -228,7 +230,8 @@ public Customer getCustomer(@PathVariable String id) {
 
 Try retrieving a customer using Postman.
 
-What happens when we try to retrieve a customer that does not exist?
+> **What happens when we try to retrieve a customer that does not exist?**
+> You will get a `500 Internal Server Error`. This is technically wrong — the server didn't crash, the client sent a bad ID. We will fix this properly in the Custom Exception section below.
 
 ### Update
 
@@ -244,9 +247,9 @@ public Customer updateCustomer(@PathVariable String id, @RequestBody Customer cu
 }
 ```
 
-Based on IETF's [HTTP specification](https://tools.ietf.org/html/rfc7231#section-4.3.4), the `PUT` method is used to replace the current representation of the target resource with the request payload. To keep our implementation simple, we will only update if the record exists.
+The `PUT` method is used to replace the current representation of the target resource with the request payload. To keep our implementation simple, we will only update if the record exists.
 
-Note that you can also use the `PATCH` method to apply partial modifications to a resource, rather than replacing it entirely.
+Note that you can also use the `PATCH` method to apply partial modifications to a resource, rather than replacing it entirely. See [MDN HTTP Methods](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods) for more.
 
 ### Delete
 
@@ -263,18 +266,29 @@ public Customer deleteCustomer(@PathVariable String id) {
 
 ### `ResponseEntity`
 
-Now, we are currently just returning JSON data. We should also specify the status code, so that the consumer of our API gets a more meaningful response.
+Now, we are currently just returning JSON data. We should also specify the HTTP status code, so that the consumer of our API gets a more meaningful response.
 
-`ResponseEntity` is a generic type that allows us to specify the response body and the status code.
+**What is `ResponseEntity`?**
 
-Currently it is always returning a `200` status code, which generally means that the request was successful. But there are other status codes that we should use to indicate the status of the request:
+An HTTP response has three parts: a **status code**, **headers**, and a **body**. Up until now, Spring Boot has been handling the status code automatically — always returning `200 OK`. `ResponseEntity` gives you explicit control over all three parts of the response.
+
+```
+HTTP/1.1 201 Created          ← status code
+Content-Type: application/json ← header
+                               ← blank line
+{ "id": "abc123", ... }        ← body
+```
+
+`ResponseEntity<T>` is a generic wrapper where `T` is the type of your response body.
+
+Currently all endpoints return `200`, but we should use the correct status codes:
 
 - `200` - OK, used when a resource is retrieved
 - `201` - Created, used when a new resource is created
 - `204` - No Content, used when a resource is deleted
 - `404` - Not Found, used when a resource is not found
 
-https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+Reference: [MDN HTTP Status Codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)
 
 We can use the `HttpStatus` enum to specify the status code.
 ```java
@@ -307,14 +321,14 @@ The rest of the paths can then be updated to remove the `/customers` prefix — 
 
 ### Custom Exception
 
-Currently, when we enter an invalid id, we get an Internal Server Error. This is because we are trying to get the index of the customer in the `customers` list, but the customer does not exist.
+Currently, when we enter an invalid id, we get a `500 Internal Server Error`. This is because we are trying to get the index of the customer in the `customers` list, but the customer does not exist.
 
-Technically, it is not really a server error because it is the client that is sending an invalid request. We should return a `404` status code instead.
+Technically, it is not a server error — it is the client that is sending an invalid request. We should return a `404` status code instead.
 
 To handle this we can create a custom exception.
 ```java
 public class CustomerNotFoundException extends RuntimeException {
-  CustomerNotFoundException(String id) {
+  public CustomerNotFoundException(String id) {
     super("Could not find customer with id: " + id);
   }
 }
@@ -372,11 +386,11 @@ Create the following endpoints:
 
 ## Part 3: Intro to Lombok
 
-Lombok is a library that helps us to reduce boilerplate code. It does this by generating the code for us during compile time.
+Lombok is a library that helps us reduce boilerplate code. It does this by generating code for us at **compile time** — so the bytecode contains all the getters, setters, and constructors, but your source file stays clean.
 
 ### Installation
 
-To install Lombok, we need to add the Lombok dependency in `pom.xml`.
+To install Lombok, add the dependency in `pom.xml`.
 ```xml
 <dependency>
   <groupId>org.projectlombok</groupId>
@@ -384,14 +398,30 @@ To install Lombok, we need to add the Lombok dependency in `pom.xml`.
 </dependency>
 ```
 
+### Common Lombok Annotations
+
+| Annotation | What it generates |
+|---|---|
+| `@Getter` | Getter methods for all fields |
+| `@Setter` | Setter methods for all fields |
+| `@NoArgsConstructor` | A no-argument constructor |
+| `@AllArgsConstructor` | A constructor with all fields as parameters |
+| `@Data` | `@Getter` + `@Setter` + `@ToString` + `@EqualsAndHashCode` + `@RequiredArgsConstructor` |
+
+In real Spring Boot projects, you will see `@Data` used most commonly on entity and POJO classes.
+
 ### Example Usage
 
-For now, we will just use the `@Getter` and `@Setter` annotations. These annotations will generate the getters and setters for us. This keeps our code clean and concise.
+Without Lombok, our `Customer` class requires manually written getters, setters, and constructors — dozens of lines of repetitive code. With Lombok:
+
 ```java
-@Getter
-@Setter
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
 public class Customer {
-  private String id;
+  private final String id = UUID.randomUUID().toString();
   private String firstName;
   private String lastName;
   private String email;
@@ -401,7 +431,9 @@ public class Customer {
 }
 ```
 
-For further reading, you can read the [documentation](https://projectlombok.org/features/all).
+`@Data` generates all getters and setters. `@NoArgsConstructor` generates the default constructor. The `id` field remains `final` and is auto-generated — Lombok will not generate a setter for `final` fields.
+
+For further reading, see the [Lombok documentation](https://projectlombok.org/features/all).
 
 ---
 
