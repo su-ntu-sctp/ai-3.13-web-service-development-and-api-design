@@ -129,9 +129,15 @@ For `DELETE` — select `DELETE`, add the `id` to the URL, no body needed.
 
 If you have not done the last activity from the previous lesson, you can start creating a new Spring Boot project now.
 
+> **Package/folder structure — standing rule for `simple-crm`:** every class goes in a folder matching its layer. As we create each class below, place it accordingly:
+> - Controller classes → `controller` folder
+> - Entity/POJO classes (e.g. `Customer`) → `model` folder
+> - Custom exception classes (e.g. `CustomerNotFoundException`) → `exceptions` folder
+> - (Later lessons) Service interfaces + implementations → `service` folder; repository classes/interfaces → `repository` folder
+
 ### `Customer` POJO
 
-Create our `Customer` POJO.
+Create our `Customer` POJO. Place this class in the **`model`** folder (e.g. `sg.edu.ntu.simple_crm.model.Customer`).
 ```java
 public class Customer {
   private String id;
@@ -148,7 +154,7 @@ public class Customer {
 
 ### Storing `Customer` objects
 
-We will use an `ArrayList` to store our `Customer` objects in `CustomerController.java`.
+We will use an `ArrayList` to store our `Customer` objects in `CustomerController.java`. Place this class in the **`controller`** folder (e.g. `sg.edu.ntu.simple_crm.controller.CustomerController`).
 ```java
 @RestController
 public class CustomerController {
@@ -187,6 +193,8 @@ Send a `POST` request to `http://localhost:8080/customers` with the following pa
 Send the request and check the response. Is it what you expected?
 
 When Postman sends us data, it sends it as a `JSON`. But in our handler method, we are expecting a `Customer` object. Our application does not know how to convert the `JSON` into a `Customer` object. We need to tell our application how to do this.
+
+> **What actually happens right now, without any conversion instruction?** The request does not fail or error out. Spring still creates a `Customer` object using the no-arg constructor and adds it to the `customers` list — but since Spring has no way to populate that object's fields from a JSON request body, every field comes back `null` (or `0` for `yearOfBirth`). So an object *is* added to the list, but the actual values you sent (`"Bruce"`, `"Banner"`, etc.) are not captured anywhere — they're lost. Check your `ArrayList` and you'll find an extra entry with blank fields, not the customer you sent.
 
 This is done by adding the `@RequestBody` annotation to our handler method.
 ```java
@@ -376,7 +384,7 @@ Currently, when we enter an invalid id, we get a `500 Internal Server Error`. Th
 
 Technically, it is not a server error — it is the client that is sending an invalid request. We should return a `404` status code instead.
 
-To handle this we can create a custom exception.
+To handle this we can create a custom exception. Place this class in the **`exceptions`** folder (e.g. `sg.edu.ntu.simple_crm.exceptions.CustomerNotFoundException`).
 ```java
 public class CustomerNotFoundException extends RuntimeException {
   public CustomerNotFoundException(String id) {
@@ -416,7 +424,7 @@ Proceed to update the rest of the endpoints to handle the `CustomerNotFoundExcep
 
 ### 👨‍💻 Activity **(20 minutes)**
 
-Practice creating CRUD endpoints with another resource called `Product` by yourself.
+Practice creating CRUD endpoints with another resource called `Product` by yourself. Follow the same folder structure as `Customer` — the `Product` model goes in `model`, `ProductController` goes in `controller`, and (if you follow the same pattern) `ProductNotFoundException` goes in `exceptions`.
 
 The `Product` class should have the following fields:
 
