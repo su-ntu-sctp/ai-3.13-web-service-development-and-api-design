@@ -1,14 +1,14 @@
 # Lesson 3.13: Web Service Development and API Design
 
 ## Lesson Overview
-This lesson builds upon the foundational REST API concepts from the previous lesson and teaches students how to implement complete CRUD (Create, Read, Update, Delete) operations for managing resources. Students will learn the differences between controller annotations, handle HTTP request/response properly using ResponseEntity, implement custom exception handling, and use Lombok to reduce boilerplate code. By working through a practical Customer Resource Management (CRM) example, students will gain hands-on experience building production-ready REST APIs that follow industry best practices for status codes, error handling, and code organization.
+This lesson builds upon the foundational REST API concepts from the previous lesson and teaches students how to implement complete CRUD (Create, Read, Update, Delete) operations for managing resources. Students will learn how Spring uses annotations to create and manage objects, handle HTTP request/response properly using ResponseEntity, implement custom exception handling, and use Lombok to reduce boilerplate code. By working through a practical Customer Resource Management (CRM) example, students will gain hands-on experience building production-ready REST APIs that follow industry best practices for status codes, error handling, and code organization.
 
 ---
 
 ## Lesson Objectives
 By the end of this lesson, students will be able to:
 
-1. **Differentiate** between `@Component`, `@Controller`, and `@RestController` annotations
+1. **Explain** how `@Component`, `@RestController` and `@ResponseBody` work, and why a data class should never be a Spring bean
 2. **Implement** complete CRUD operations for REST resources using `ResponseEntity` with appropriate HTTP status codes
 3. **Create** and handle custom exceptions for better error management
 4. **Apply** Lombok annotations to reduce boilerplate code in POJOs
@@ -38,15 +38,15 @@ public class CustomerController {
 
 A **bean** is simply an object that is created and managed by Spring Boot. Instead of you writing `new CustomerController()` yourself, Spring Boot creates it for you, manages its lifecycle, and makes it available throughout your application.
 
-When you annotate a class with `@Component` (or any of its specializations like `@Controller`, `@RestController`, `@Service`), you are telling Spring Boot: *"Please create an instance of this class and manage it for me."*
+When you annotate a class with `@Component` (or a specialization such as `@RestController` or `@Service`), you are telling Spring Boot: *"Please create an instance of this class and manage it for me."*
 
 This is the foundation of **Dependency Injection** — Spring manages your objects so you don't have to wire them together manually.
 
-### `@Component`, `@Controller`, and `@RestController`
+**Important:** beans are **singletons** by default. Spring creates *one* instance and shares it across the whole application, for every request and every thread. Remember this — it determines what should and should not be a bean.
 
-These three annotations form a hierarchy:
+### `@Component`
 
-**`@Component`** is the most generic. It simply tells Spring: *"Create a bean for this class."* You use it for utility classes or any Spring-managed object that doesn't fit a more specific role.
+`@Component` is the most generic bean annotation. It simply tells Spring: *"Create a bean for this class."* You use it for classes that **do work** — validators, helpers, and later on, services and repositories.
 
 ```java
 @Component
@@ -57,20 +57,41 @@ public class EmailValidator {
 }
 ```
 
-**`@Controller`** is a specialization of `@Component`. It signals that this class handles web requests. It inherits everything `@Component` does, but adds the context that this is a web layer class. By default, handler methods in a `@Controller` are expected to return a **view name** (an HTML page).
+A useful rule of thumb, which we will come back to shortly:
 
-**`@ResponseBody`** changes that behavior. When added to a method (or the class), it tells Spring: *"Don't look for a view — serialize the return value directly into the HTTP response body as JSON."*
+> **Inject the things that *do work*. Create the things that *hold data*.**
 
-**`@RestController`** is simply a shortcut that combines both:
+### `@RestController` and `@ResponseBody`
+
+`@RestController` is what we use on every controller class in this module. It does two things at once:
+
+1. It registers the class as a bean (it is a specialization of `@Component`).
+2. It tells Spring that whatever a method returns **is the data** — serialize it straight into the HTTP response body as JSON.
+
+That second behaviour comes from `@ResponseBody`, which is already built into `@RestController`. **You never need to add `@ResponseBody` separately.**
 
 ```java
 @RestController
-// is exactly the same as:
-@Controller
-@ResponseBody
+public class CustomerController {
+
+    @GetMapping("/customers")
+    public String getCustomers() {
+        return "customers";   // returned as JSON data
+    }
+}
 ```
 
-Since we are building a REST API and always returning JSON — not HTML pages — we will always use `@RestController`.
+Under the hood, Spring uses the **Jackson** library to convert your Java object into JSON. We will see the reverse of this shortly with `@RequestBody`, which uses the same machinery to convert incoming JSON into a Java object.
+
+> **Sidenote — `@Controller`:** you will see an older annotation called `@Controller` in tutorials and older codebases. That belongs to the traditional style where the server built and returned a complete HTML page. We are building APIs — our frontend is separate and we always return JSON — so we use `@RestController` throughout this module.
+
+### Meta-annotations
+
+`@RestController` is an example of a **meta-annotation**: a single annotation that is itself made up of other annotations. Rather than writing several annotations on every controller, you write one that bundles them.
+
+You have already been using another one without realising it. `@SpringBootApplication` on your main class is a meta-annotation that bundles together the annotations that enable auto-configuration and tell Spring which packages to scan for beans.
+
+This is why component scanning "just works": `@SpringBootApplication` scans its own package and everything below it. If a class sits outside that package tree, Spring will never find it, and it will never become a bean.
 
 ---
 
@@ -123,22 +144,51 @@ Follow the same pattern as POST for `PUT` — select `PUT`, add the `id` to the 
 
 For `DELETE` — select `DELETE`, add the `id` to the URL, no body needed.
 
+> **Note — why JSON looks messy in a browser but neat in Postman.** The server sends exactly the same response to both. Postman reads the `Content-Type: application/json` header and pretty-prints it for you; a browser just dumps the raw text on one line. If you want readable JSON in the browser, either install a JSON formatter extension, or open DevTools → Network → click the request → Preview.
+
 ---
 
 ## Part 3: Building Our `simple-crm`
 
-If you have not done the last activity from the previous lesson, you can start creating a new Spring Boot project now.
+We continue with the **`simple-crm`** project you created at the end of the previous lesson. Do not create a new project — this is the project we build on for the rest of the module.
 
-> **Package/folder structure — standing rule for `simple-crm`:** every class goes in a folder matching its layer. As we create each class below, place it accordingly:
+> **Package/folder structure — standing rule for `simple-crm`:** every class goes in a folder matching its layer. Create these folders inside your base package (`sg.edu.ntu.simple_crm`) and place each class accordingly:
 > - Controller classes → `controller` folder
 > - Entity/POJO classes (e.g. `Customer`) → `model` folder
 > - Custom exception classes (e.g. `CustomerNotFoundException`) → `exceptions` folder
 > - (Later lessons) Service interfaces + implementations → `service` folder; repository classes/interfaces → `repository` folder
 
+> **Moving existing classes into folders.** Dragging a file into a new folder in VS Code moves the file but does **not** update the `package` line at the top, which is why you get a red error afterwards. Either use **right-click on the class name in the editor → Refactor → Move**, which updates the package and all references for you, or drag the file and then fix the `package` line by hand.
+>
+> If the application then fails to start with a `ConflictingBeanDefinitionException`, it means an old copy of the class is still in the original location. Delete it and run `mvn clean` before restarting.
+
+### Cleanup: remove the `@Component` / `@Autowired` from `Customer`
+
+In the previous lesson, you annotated `Customer` with `@Component` and injected it into `CustomerController` with `@Autowired`. That was done purely to demonstrate how the two annotations work together. **We now need to undo it**, before we build our CRUD endpoints.
+
+Make these three changes:
+
+1. Remove `@Component` from the `Customer` class.
+2. Remove the `@Autowired private Customer customer;` field from `CustomerController`.
+3. Remove the old `/customer` endpoint that returned a single preset customer.
+
+**Why?** Because beans are singletons. Annotating `Customer` with `@Component` means Spring creates exactly **one** `Customer` object and shares that same instance across the entire application. Every request would be reading and writing the same object — one user's data would overwrite another's.
+
+But a CRM needs *many* customers, each with its own id and its own values. `Customer` is **data**, not a service. Data objects are created with `new`, or built by Jackson from incoming JSON, or (later in this module) loaded by JPA from a database row. They are never created by the Spring container.
+
+This is the rule from Part 1 in action:
+
+> **Inject the things that *do work*. Create the things that *hold data*.**
+
+Dependency injection is genuinely useful, and we return to it properly in the next lesson when we build a **service** and a **repository**. Those are working classes — they have behaviour, they hold no per-request data, and there is real value in one shared instance. That is where `@Autowired` belongs.
+
 ### `Customer` POJO
 
 Create our `Customer` POJO. Place this class in the **`model`** folder (e.g. `sg.edu.ntu.simple_crm.model.Customer`).
 ```java
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
+@JsonPropertyOrder({ "id", "firstName", "lastName", "email", "contactNo", "jobTitle", "yearOfBirth" })
 public class Customer {
   private String id;
   private String firstName;
@@ -151,6 +201,10 @@ public class Customer {
   // Generate getters and setters
 }
 ```
+
+> **Why `@JsonPropertyOrder`?** Without it, the fields appear in the JSON in an unpredictable order — `id` might show up in the middle rather than first. Jackson builds the JSON from the getters it discovers by reflection, and the JVM gives no guarantee about the order those come back in. `@JsonPropertyOrder` simply tells Jackson the order to write them in. This is cosmetic only: JSON is an unordered set of key-value pairs, and every client reads fields by name, not position. Nothing breaks without it — it just makes the response easier to read.
+
+> **Why is `id` a `String` and not a number?** Because we are about to generate it with `UUID.randomUUID()`. A UUID is a 128-bit value written as hex with dashes (`a1b2c3d4-e5f6-...`) — it will not fit in a `long`, so `String` is the natural type. We use a UUID because our "database" is currently just an `ArrayList` in memory: there is no auto-increment column to assign ids for us, so each object generates its own. When we move to JPA later in the module, you will see the database-assigned `Long` id approach instead.
 
 ### Storing `Customer` objects
 
@@ -207,6 +261,8 @@ public Customer createCustomer(@RequestBody Customer customer) {
 
 The `@RequestBody` annotation tells our application to convert the JSON into a `Customer` object. Spring Boot is now able to de-serialize the JSON into a `Customer` object, which is why we are able to add it to our `customers` list.
 
+Notice that `@RequestBody` and `@ResponseBody` are two directions of the same mechanism: Jackson converting JSON into a Java object on the way in, and a Java object into JSON on the way out.
+
 #### `uuid`
 
 Currently, we are manually setting the `id` of our `Customer` object. We can use the `UUID` class to generate a unique id for us whenever a new `Customer` object is created.
@@ -247,6 +303,8 @@ public CustomerController() {
 }
 ```
 
+Note that we create these with `new` — exactly as described earlier. `Customer` holds data, so we create it ourselves rather than asking Spring for it.
+
 This will mean we need a constructor in our `Customer` class that takes in the first name and last name.
 ```java
 public Customer(String firstName, String lastName) {
@@ -264,7 +322,7 @@ To get a specific customer, we need to know the `id` of the customer. We can get
 
 Since we are storing the data in an array, we need to find the index of the customer in the array.
 
-Let's create a helper method to do this since we will be using it in multiple places.
+Let's create a helper method to do this since we will be using it in multiple places. Note that it is `private` — it is an internal detail of the controller, not part of our API.
 ```java
 private int getCustomerIndex(String id) {
     for (Customer customer : customers) {
@@ -361,9 +419,9 @@ public ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
 }
 ```
 
-### 👨‍💻 Activity **(10 minutes)**
+Update the rest of your endpoints to use `ResponseEntity` with the appropriate status code.
 
-Update the rest of the endpoints to use `ResponseEntity` with the appropriate status codes.
+> **Watch out:** each endpoint has a *success* status. It is very easy to copy a `ResponseEntity` line from one method to another and leave the wrong status behind — for example returning `NOT_FOUND` from a delete that actually succeeded. Check each one individually.
 
 ### `@RequestMapping`
 
@@ -377,6 +435,8 @@ public class CustomerController {
 ```
 
 The rest of the paths can then be updated to remove the `/customers` prefix — for example `@GetMapping("/customers/{id}")` becomes `@GetMapping("/{id}")`.
+
+Keep the leading `/` on every method-level path so they all look consistent.
 
 ### Custom Exception
 
@@ -420,30 +480,43 @@ public ResponseEntity<Customer> getCustomer(@PathVariable String id) {
 }
 ```
 
-Proceed to update the rest of the endpoints to handle the `CustomerNotFoundException`.
+---
 
-### 👨‍💻 Activity **(20 minutes)**
+### 👨‍💻 Activity **(25 minutes)**
 
-Practice creating CRUD endpoints with another resource called `Product` by yourself. Follow the same folder structure as `Customer` — the `Product` model goes in `model`, `ProductController` goes in `controller`, and (if you follow the same pattern) `ProductNotFoundException` goes in `exceptions`.
+Both tasks are done in your existing `simple-crm` project. Do not create any new classes.
 
-The `Product` class should have the following fields:
+#### Task 1 — Finish the exception handling
 
-- id
-- name
-- description
-- price
+We handled `CustomerNotFoundException` in `getCustomer` together. Now do the same for the two endpoints that were left:
 
-Create the following endpoints:
+- `updateCustomer` — wrap the lookup in a `try`/`catch`, return `200 OK` with the updated customer on success, `404 Not Found` if the id does not exist.
+- `deleteCustomer` — same pattern. Return `404 Not Found` if the id does not exist.
 
-- `GET /products` - Get all products
-- `GET /products/{id}` - Get a specific product
-- `POST /products` - Create a new product
-- `PUT /products/{id}` - Update a product
-- `DELETE /products/{id}` - Delete a product
+For the success case of `deleteCustomer`, try both of these and compare them in Postman:
+
+- `200 OK` with the deleted customer in the body
+- `204 No Content` with no body at all — `return new ResponseEntity<>(HttpStatus.NO_CONTENT);`
+
+Which one you choose is a genuine API design decision. `200` is useful if the client wants confirmation of exactly what was removed; `204` is cleaner when the client only needs to know it worked.
+
+Test every endpoint with both a valid and an invalid id before moving on.
+
+#### Task 2 — Refactor `Customer` with Lombok
+
+Read the Lombok section below first, then apply it to your `Customer` class:
+
+1. Add the Lombok dependency to `pom.xml`.
+2. Delete all hand-written getters and setters.
+3. Add `@Data` and `@NoArgsConstructor`.
+4. Move the UUID generation inline onto the field, and delete the no-arg constructor that used to set it.
+5. Keep the two-argument `Customer(String firstName, String lastName)` constructor.
+
+Then re-run the application and test **all five endpoints** again. Nothing should behave differently — the whole point of Lombok is that it generates exactly what you deleted. If something breaks, the most likely cause is a getter that is no longer being generated the way you expected.
 
 ---
 
-## Part 3: Intro to Lombok
+## Part 4: Intro to Lombok
 
 Lombok is a library that helps us reduce boilerplate code. It does this by generating code for us at **compile time** — so the bytecode contains all the getters, setters, and constructors, but your source file stays clean.
 
@@ -501,12 +574,16 @@ Now the UUID is generated at the field level — both constructors (and any futu
 ### Final `Customer` Class with Lombok
 
 ```java
+package sg.edu.ntu.simple_crm.model;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.util.UUID;
 
 @Data
 @NoArgsConstructor
+@JsonPropertyOrder({ "id", "firstName", "lastName", "email", "contactNo", "jobTitle", "yearOfBirth" })
 public class Customer {
   private final String id = UUID.randomUUID().toString();
   private String firstName;
@@ -525,6 +602,8 @@ public class Customer {
 ```
 
 `@Data` generates all getters and setters. `@NoArgsConstructor` generates the default no-arg constructor. Lombok will not generate a setter for `final` fields, so `id` remains immutable.
+
+Notice there is no `@Component` here. `Customer` holds data — it is never a Spring bean.
 
 For further reading, see the [Lombok documentation](https://projectlombok.org/features/all).
 
