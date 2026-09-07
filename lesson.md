@@ -605,6 +605,26 @@ public class Customer {
 
 Notice there is no `@Component` here. `Customer` holds data — it is never a Spring bean.
 
+> **Optional — returning the exception message to the client.**
+>
+> Notice that the `404` comes back with an empty body. The message we wrote inside `CustomerNotFoundException` never reaches the caller — it is only visible to us, in the logs.
+>
+> If you want to send that message back, change the return type from `ResponseEntity<Customer>` to `ResponseEntity<Object>`, so it can hold either a `Customer` or a `String`:
+>
+> ```java
+> @GetMapping("/{id}")
+> public ResponseEntity<Object> getCustomer(@PathVariable String id) {
+>   try {
+>     int index = getCustomerIndex(id);
+>     return new ResponseEntity<>(customers.get(index), HttpStatus.OK);
+>   } catch (CustomerNotFoundException e) {
+>     return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
+>   }
+> }
+> ```
+>
+> The message now appears in Postman as plain text. In a real API you would return a small JSON object instead, such as `{"error": "Could not find customer with id: 123"}`, so the front end can read a named field rather than parse raw text. Spring handles this centrally with `@ControllerAdvice`, which we will not cover here.
+
 For further reading, see the [Lombok documentation](https://projectlombok.org/features/all).
 
 ---
